@@ -1,7 +1,9 @@
 package com.mht.mhtblogservice.aop;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mht.mhtblogservice.entity.SysLog;
 import com.mht.mhtblogservice.exception.BusinessException;
+import com.mht.mhtblogservice.service.SysLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -16,76 +18,74 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.Arrays;
 
 @Slf4j
-@Aspect    // 🌟 声明这是一个 AOP 切面类
-@Component // 🌟 交给 Spring 容器统一管理
+@Aspect
+@Component
 public class LogAspect {
 
     @Autowired
-    private ObjectMapper objectMapper; // SpringBoot 自带的 JSON 转换工具，用来打印入参
+    private SysLogService sysLogService;
 
-    /**
-     * 1. 定义切入点 (Pointcut)
-     * 拦截 com.mht.mhtblogservice.controller 包及其子包下的所有类的所有方法
-     */
+    @Autowired
+    private ObjectMapper objectMapper; // 🚀 用来将后端返回的 ResultVo 序列化为 JSON 字符串保存
+
     @Pointcut("execution(* com.mht.mhtblogservice.controller..*.*(..))")
-    public void controllerPointcut() {
-    }
+    public void controllerPointcut() {}
 
-    /**
-     * 2. 编写环绕通知 (Around)
-     * 核心逻辑：包裹住整个 Controller 的方法执行生命周期
-     */
     @Around("controllerPointcut()")
     public Object doAround(ProceedingJoinPoint joinPoint) throws Throwable {
-        // ⏱️ 记录开始时间
         long startTime = System.currentTimeMillis();
 
-        // 🌐 获取当前网络请求的上下文信息（URL、IP等）
         ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-        String url = "未知URL";
         String method = "未知方法";
         if (attributes != null) {
             HttpServletRequest request = attributes.getRequest();
-            url = request.getRequestURI();
             method = request.getMethod();
         }
 
-        // 🏷️ 获取被拦截的 Java 类名和方法名
-        String className = joinPoint.getTarget().getClass().getName();
+        // 🚀 核心改动 1：获取包含完整包路径的全类名（形如 com.mht.mhtblogservice.controller.BlogController）
+        String fullClassName = joinPoint.getTarget().getClass().getName();
         String methodName = joinPoint.getSignature().getName();
-        // 获取前端传过来的真实入参参数
         String argsJson = Arrays.toString(joinPoint.getArgs());
 
-        // 🛫 【前置增强】：在接口执行前，优雅打印进站日志
-        log.info("🔔 [AOP日志监听] >>> 请求开始 | 路径: [{}] {} | 目标方法: {}.{} | 入参: {}",
-                method, url, className, methodName, argsJson);
+        // 提前组装日志基础数据
+        SysLog sysLog = new SysLog();
+        sysLog.setFullClassName(fullClassName);
+        sysLog.setMethodName(methodName);
+        sysLog.setMethod(method);
+        sysLog.setArgs(argsJson.length() > 500 ? argsJson.substring(0, 500) : argsJson);
 
         Object result;
         try {
-            // 🚀 【方法执行】：让 Controller 方法真正去跑业务（去调 Service、查数据库等）
+            // 执行真正的核心业务逻辑
             result = joinPoint.proceed();
 
-            // 🛬 【后置增强】：方法正常 Return 成功，计算耗时
             long executionTime = System.currentTimeMillis() - startTime;
-            log.info("🟢 [AOP日志监听] <<< 请求成功 | 路径: {} | 耗时: {}ms", url, executionTime);
+            sysLog.setExecutionTime(executionTime);
+            sysLog.setStatus("SUCCESS");
 
+            // 🚀 核心改动 2：将后端吐出的 ResultVo 返回值对象完美转为 JSON 文本落库
+            if (result != null) {
+                String resultJson = objectMapper.writeValueAsString(result);
+                sysLog.setResult(resultJson.length() > 1000 ? resultJson.substring(0, 1000) : resultJson); // 防超长字段
+            }
+
+            // 扔给后台虚拟线程默默写入 SQLPub
+            sysLogService.saveLog(sysLog);
             return result;
 
         } catch (Throwable e) {
-            // 🚨 【异常增强】：如果 Controller 抛出了异常，切面在这里死死抓取它！
             long executionTime = System.currentTimeMillis() - startTime;
+            sysLog.setExecutionTime(executionTime);
+            sysLog.setErrorMsg(e.getMessage());
 
-            // 精准人肉识别：看看是业务提示还是严重的系统故障
             if (e instanceof BusinessException) {
-                log.warn("⚠️ [AOP日志监听] <<< 触发业务提示 | 路径: {} | 耗时: {}ms | 提示原因: {}",
-                        url, executionTime, e.getMessage());
+                sysLog.setStatus("WARN");
             } else {
-                log.error("💥 [AOP日志监听] <<< 系统产生未知崩溃 | 路径: {} | 耗时: {}ms | 堆栈信息: ",
-                        url, executionTime, e);
+                sysLog.setStatus("ERROR");
             }
 
-            // 🌟 核心防坑死穴：记录完日志后，必须原封不动投掷出去！
-            // 只有抛出去，外层的 @RestControllerAdvice 全局异常捕获层才能拿到它并给前端包装为标准的 ResultVo.fail()
+            // 异常时也会将错误信息和入参数据异步落库
+            sysLogService.saveLog(sysLog);
             throw e;
         }
     }
