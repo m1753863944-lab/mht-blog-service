@@ -42,4 +42,26 @@ public class ArticleServiceImpl implements ArticleService {
         Object views = redisTemplate.opsForValue().get("blog:view:" + id);
         return views != null ? (Integer) views : 0; // 纯粹返回数值
     }
+
+    @Override
+    public int deleteArticle(Long id) {
+        // 1. 调用 Mapper 执行 MySQL 物理删除
+        int rows = articleMapper.deleteById(id);
+
+        // 2. 🌟 核心：如果 MySQL 删除成功，同步把 Upstash Redis 里的浏览量计数 Key 彻底抹去
+        if (rows > 0) {
+            String redisKey = "blog:view:" + id;
+            redisTemplate.delete(redisKey); // 强行销毁该缓存键，防止内存泄漏
+        }
+
+        return rows;
+    }
+
+    @Override
+    public int updateArticle(Article article) {
+        // 调用 Mapper 根据传入对象的 id 进行 title 和 content 的内容覆写
+        return articleMapper.updateById(article);
+    }
+
+
 }

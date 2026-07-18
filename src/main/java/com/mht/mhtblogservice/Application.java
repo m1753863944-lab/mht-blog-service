@@ -9,6 +9,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class Application {
     public static void main(String[] args) {
         SpringApplication.run(Application.class, args);
-        System.out.println("🚀 [JDK 21 + Spring Boot 3.3.4] 原生 XML 架构博客后端一键启动成功！");
+        System.out.println("🚀 mht博客后端一键启动成功！");
     }
 }

@@ -15,4 +15,10 @@ public interface ArticleMapper {
 
     // 插入新文章（绑定 XML 中的 id="insert"）
     int insert(Article article);
+
+    int deleteById(Long id);
+
+    int updateById(Article article);
+
+
 }

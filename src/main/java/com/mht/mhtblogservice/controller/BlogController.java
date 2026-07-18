@@ -43,4 +43,42 @@ public class BlogController {
         Integer views = articleService.getArticleViews(id);
         return ResultVo.success(views);
     }
+
+
+    // 🚀 新增：根据 ID 删除博客文章（同步清理 MySQL + Redis）
+    @DeleteMapping("/delete/{id}")
+    public ResultVo<String> deleteArticle(@PathVariable Long id) {
+        // 1. 先调用详情服务，检查这篇文章到底在不在
+        Article article = articleService.getArticleDetail(id);
+        if (article == null) {
+            throw new BusinessException("非常抱歉，该文章本身就不存在，无法执行删除！");
+        }
+
+        // 2. 执行双清删除逻辑
+        int rows = articleService.deleteArticle(id);
+
+        return rows > 0 ? ResultVo.success("文章及缓存数据已成功同步卸载！") : ResultVo.fail("删除失败");
+    }
+
+
+    // 🚀 新增：根据 ID 修改/更新博客文章（完美包装 ResultVo 并享受 AOP 日志记录）
+    @PutMapping("/update")
+    public ResultVo<String> updateArticle(@RequestBody Article article) {
+        // 1. 安全检查：前端必须传过来要修改的文章 ID，否则无法更新
+        if (article.getId() == null) {
+            throw new BusinessException("更新失败：缺少必要的文章主键 ID 参数！");
+        }
+
+        // 2. 核心校验：先调用详情服务，检查这篇文章目前在云端数据库是否真实存在
+        Article existArticle = articleService.getArticleDetail(article.getId());
+        if (existArticle == null) {
+            throw new BusinessException("修改失败：该文章不存在或已被其他人提前删除！");
+        }
+
+        // 3. 执行更新逻辑
+        int rows = articleService.updateArticle(article);
+
+        return rows > 0 ? ResultVo.success("文章内容已成功同步至云端数据库！") : ResultVo.fail("更新失败");
+    }
+
 }

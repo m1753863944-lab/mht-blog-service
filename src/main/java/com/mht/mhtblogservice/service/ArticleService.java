@@ -11,4 +11,11 @@ public interface ArticleService {
     Article getArticleDetail(Long id);
 
     Integer getArticleViews(Long id);
+
+
+    int deleteArticle(Long id);
+
+    int updateArticle(Article article);
+
+
 }
