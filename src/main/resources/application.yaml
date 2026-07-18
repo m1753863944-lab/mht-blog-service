@@ -1,0 +1,41 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: mht-blog-service
+
+  # 🚀 一键开启 JDK 21 虚拟线程，榨干 Render 免费服务器性能
+  threads:
+    virtual:
+      enabled: true
+
+  # 1. 关系型数据库配置（连国内 SQLPub 杭州机房）
+  datasource:
+    url: jdbc:mysql://mysql6.sqlpub.com:3311/mht_blog?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
+    username: menghantao
+    password: S1fKdsCd1dssVClK
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # 2. Redis 配置（连海外 Upstash 节点，Spring Boot 3 标准前缀）
+  data:
+    redis:
+      host: quick-dinosaur-182050.upstash.io
+      port: 6379
+      password: gQAAAAAAAsciAAIgcDFlNzY3YWRiZDBhZTE0YTU0OTg4YzlhOTJlMmNiMTU3NA
+      ssl:
+        enabled: true # 🌟 必须开启，Upstash 强制外网 TLS 加密
+      timeout: 8000ms # 🚀 针对跨境网络抖动，防超时配置
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+# 3. MyBatis 原生 XML 路径及 SQL 日志配置
+mybatis:
+  # 告诉框架去 resources 目录下的 mappers 文件夹里找所有的 .xml 映射文件
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    # 在控制台直接喷吐出美化后的 SQL 执行语句，极大方便调试
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
