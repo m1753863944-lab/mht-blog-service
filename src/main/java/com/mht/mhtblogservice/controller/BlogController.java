@@ -1,56 +1,46 @@
 package com.mht.mhtblogservice.controller;
 
 import com.mht.mhtblogservice.entity.Article;
-import com.mht.mhtblogservice.mapper.ArticleMapper;
+import com.mht.mhtblogservice.entity.ResultVo;
+import com.mht.mhtblogservice.exception.BusinessException;
+import com.mht.mhtblogservice.service.ArticleService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/blog")
+@CrossOrigin(origins = "*")
 public class BlogController {
 
     @Autowired
-    private ArticleMapper articleMapper; // 完美通过原生 XML 的配置进行自动织入
+    private ArticleService articleService;
 
-    @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
-
-    // 1. 获取所有文章列表
     @GetMapping("/list")
-    public List<Article> getArticleList() {
-        return articleMapper.selectList();
+    public ResultVo<List<Article>> getArticleList() {
+        List<Article> list = articleService.getArticleList();
+        return ResultVo.success(list); // 在控制层统一组装成功返回
     }
 
-    // 2. 发布新博客
     @PostMapping("/create")
-    public String createArticle(@RequestBody Article article) {
-        int rows = articleMapper.insert(article);
-        return rows > 0 ? "发布文章成功！" : "发布失败";
+    public ResultVo<String> createArticle(@RequestBody Article article) {
+        int rows = articleService.createArticle(article);
+        return rows > 0 ? ResultVo.success("发布文章成功！") : ResultVo.fail("发布失败");
     }
 
-    // 3. 点击某篇文章阅读（查 MySQL，同时将远在东京的 Upstash Redis 计数器异步 +1）
     @GetMapping("/{id}")
-    public Article getArticleDetail(@PathVariable Long id) {
-        Article article = articleMapper.selectById(id);
+    public ResultVo<Article> getArticleDetail(@PathVariable Long id) {
+        Article article = articleService.getArticleDetail(id);
         if (article == null) {
-            throw new RuntimeException("该博客不存在！");
+            throw new BusinessException("非常抱歉，该博客文章已被作者删除或不存在！");
         }
 
-        // 核心统计逻辑 (Key 格式 -> blog:view:文章ID)
-        String redisKey = "blog:view:" + id;
-        redisTemplate.opsForValue().increment(redisKey);
-
-        return article;
+        return ResultVo.success(article);
     }
 
-    // 4. 从 Redis 里秒级拉取最新计数值
     @GetMapping("/{id}/views")
-    public Integer getArticleViews(@PathVariable Long id) {
-        String redisKey = "blog:view:" + id;
-        Object views = redisTemplate.opsForValue().get(redisKey);
-        return views != null ? (Integer) views : 0;
+    public ResultVo<Integer> getArticleViews(@PathVariable Long id) {
+        Integer views = articleService.getArticleViews(id);
+        return ResultVo.success(views);
     }
 }
