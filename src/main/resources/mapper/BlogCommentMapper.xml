@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.mht.mhtblogservice.mapper.BlogCommentMapper">
+
+<resultMap id="CommentResultMap" type="com.mht.mhtblogservice.entity.BlogComment">
+<id property="id" column="id" />
+<result property="postId" column="post_id" />
+<result property="author" column="author" />
+<result property="text" column="text" />
+<result property="createTime" column="create_time" />
+</resultMap>
+
+<!-- 1. 按时间倒序拉取留言列表 -->
+<select id="selectByPostId" resultMap="CommentResultMap">
+SELECT id, post_id, author, text, create_time
+FROM blog_comment
+WHERE post_id = #{postId}
+ORDER BY create_time DESC
+</select>
+
+<!-- 2. 插入新留言 -->
+<insert id="insertComment" useGeneratedKeys="true" keyProperty="id">
+INSERT INTO blog_comment (post_id, author, text)
+VALUES (#{postId}, #{author}, #{text})
+</insert>
+
+</mapper>
